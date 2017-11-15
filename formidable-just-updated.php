@@ -3,10 +3,11 @@ namespace ajk_frm_just_updated;
 /*
 Plugin Name: Formidable “Just Updated” Trigger
 Description: Trigger an action only when specified fields were JUST updated
-Version:	 1.0
-Author:	  Andrew J Klimek
-Author URI:  
-License:	 GPL2
+Version:     1.0
+Author:      Andrew J Klimek
+Author URI:  https://github.com/andrewklimek
+Plugin URI:  https://github.com/andrewklimek/formidable-just-updated
+License:     GPL2
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Requires Formidable 2.01.02 or higher, because I had to add a new hook to formidable for this to work:
