@@ -27,8 +27,9 @@ function skip( $message, $atts ) {
 	
 	// If used with formidable’s autoresponder,
 	// prevent 'check_update_actions' from triggering this action later on during 'frm_after_update_entry'
-	if ( function_exists( '\FrmAutoresponderAppController::remove_action_from_global' ) ) {
-		\FrmAutoresponderAppController::remove_action_from_global( $atts );
+	global $frm_vars;
+	if ( isset( $frm_vars['action_check'] ) ) {
+		unset( $frm_vars['action_check'][ $atts['action']->ID ] );
 	}
 	
 	// error_log( "Skip because {$message} - entry: {$atts['entry']->id} action: {$atts['action']->post_name} {$atts['action']->post_title}"  );// for debugging
