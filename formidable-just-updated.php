@@ -3,7 +3,7 @@ namespace ajk_frm_just_updated;
 /*
 Plugin Name: Formidable “Just Updated” Trigger
 Description: Trigger an action only when specified fields were JUST updated
-Version:     1.1
+Version:     1.2
 Author:      Andrew J Klimek
 Author URI:  https://github.com/andrewklimek
 Plugin URI:  https://github.com/andrewklimek/formidable-just-updated
@@ -13,19 +13,6 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Requires Formidable 2.01.02 or higher, because I had to add a new hook to formidable for this to work:
 https://github.com/Strategy11/formidable-forms/commit/d81c0c03a3d5e7fc866bdfb0d932c4683d3b4602
 $skip_this_action = apply_filters( 'frm_skip_form_action', $skip_this_action, compact( 'action', 'entry', 'form', 'event' ) );
-
-Formidable “Just Updated” Trigger is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 2 of the License, or
-any later version.
- 
-Formidable “Just Updated” Trigger is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
- 
-You should have received a copy of the GNU General Public License along with 
-Formidable “Just Updated” Trigger. If not, see https://www.gnu.org/licenses/gpl-2.0.html.
 */
 
 add_action( 'frm_additional_action_settings', __NAMESPACE__ .'\add_settings', 100, 2 );
@@ -33,8 +20,7 @@ add_action( 'frm_skip_form_action', __NAMESPACE__ .'\intercept', 11, 2 );
 add_filter( 'frm_pre_update_entry', __NAMESPACE__ .'\cache_old_values', 10, 2 );
 add_action( 'wp_ajax_frm_entries_update_field_ajax', __NAMESPACE__ .'\cache_old_value_ajax');
 add_action( 'wp_ajax_nopriv_frm_entries_update_field_ajax', __NAMESPACE__ .'\cache_old_value_ajax');
-
-
+add_filter('frm_form_options_before_update', __NAMESPACE__ .'\options_update', 20, 2);
 
 
 function skip( $message, $atts ) {
@@ -45,7 +31,7 @@ function skip( $message, $atts ) {
 		\FrmAutoresponderAppController::remove_action_from_global( $atts );
 	}
 	
-	//error_log( "Skip because {$message}: " . $atts['action']->post_content['email_subject'] );// for debugging
+	// error_log( "Skip because {$message} - entry: {$atts['entry']->id} action: {$atts['action']->post_name} {$atts['action']->post_title}"  );// for debugging
 	
 	return "Skipped because " . $message;
 }
@@ -68,16 +54,17 @@ function intercept( $skip, $atts ) {
 		return $skip;
 	}
 
+	// error_log( "Processing: {$atts['action']->post_name}"  );// for debugging
+
 	if ( $event !== 'update' ) {// does formidable's autoresponder ignore this?
+		// error_log("skip because this wasn’t an update.");
 		return "skip because this wasn’t an update.";
 	}
 
 	if ( ! is_object( $entry ) ) {// apparently $entry can be integer or object!
 		$entry = \FrmEntry::getOne( $entry, true );
+		$atts['entry'] = $entry;
 	}
-	
-	// error_log( 'doing ' . $action->post_content['email_subject'] );
-	
 	
 	$prev_value_cond = $changed_setting = array();
 	
@@ -115,6 +102,7 @@ function intercept( $skip, $atts ) {
 	// was this triggered by an "update field" shortcode [frm-entry-update-field]
 	if ( isset( $_POST['action'] ) && $_POST['action'] === 'frm_entries_update_field_ajax' ) {
 		
+		// error_log( 'just updated via ajax');
 		// error_log( '$changed_setting:  ' . print_r( $changed_setting, true ) );
 		// error_log( '$_POST:  ' . print_r( $_POST, true ) );
 		// error_log( '$prev_value_cond:  ' . print_r( $prev_value_cond, true ) );
@@ -170,7 +158,7 @@ function intercept( $skip, $atts ) {
 	} else {
 		return skip( "either there were no changes or the cache returned nothing so we don’t know!", $atts );
 	}
-	
+	// error_log("not skipped");
 	return $skip;
 }
 
@@ -194,7 +182,11 @@ function check_conditionals( $prev_value_cond, $previous_values ) {
 
 // cache old values before update
 function cache_old_values($values, $id) {
-	
+
+	// see if this is even a form that uses the just-upated functionality, via stored array of form IDs (ids are the array keys; all values are 1)
+	$forms = get_option('frm_forms_using_just_updated_option', array());
+	if ( empty( $forms[ (int) $values['form_id'] ] ) ) return $values;
+
 	if ( wp_cache_get( 'frm_changed_fields' ) ) error_log("already had frm_changed_fields cache ??");
 
 	// get ID => value array of old values
@@ -209,20 +201,71 @@ function cache_old_values($values, $id) {
 }
 // different caching function for the AJAX, single-field, 1-click update buttons, since the other hook isn’t fired
 function cache_old_value_ajax() {
-	
-	// $entry_id = FrmAppHelper::get_param( 'entry_id', 0, 'post', 'absint' );
-	// $field_id = FrmAppHelper::get_param( 'field_id', 0, 'post', 'sanitize_title' );
-	
+
 	if ( empty( $_POST['entry_id'] ) || empty( $_POST['field_id'] ) ) {
 		error_log('couldn’t get $_POST[\'entry_id\'] or $_POST[\'entry_id\'] during cache_old_value_ajax in formidable-just-updated.php');
 		return;
 	}
+
+	// need to get form id from entry id or field id... is it really faster?
+	// if ( $field = \FrmField::getOne( $_POST['field_id'] ) ) {
+	// 	$form_id = $field->form_id;
+	// 	// see if this is even a form that uses the just-upated functionality, via stored array of form IDs (ids are the array keys; all values are 1)
+	// 	$forms = get_option('frm_forms_using_just_updated_option', array());
+	// 	if ( empty( $forms[ (int) $form_id ] ) ) {
+	// 		return;
+	// 	}
+	// }
 	
 	$old_value = \FrmEntryMeta::get_entry_meta_by_field( (int) $_POST['entry_id'], (int) $_POST['field_id'] );
 	
 	wp_cache_set( 'frm_changed_fields', array( $_POST['field_id'] => $old_value ) );
 
 }
+
+/**
+ * store an array of forms which actually use an action with the "just updated" functionality
+ * this allows me to not waste db call caching the old values on every form submit
+ * even though the hook is called "before update" it seems to get the correct new values.
+ * 'frm_update_form' runs later but it runs also on "build" tab saves add_action('frm_update_form', function($form_id, $value){}, 10, 2);
+ */
+
+function options_update( $options, $values ){
+
+	$form_id = (int) $values['id'];
+
+	$forms = get_option('frm_forms_using_just_updated_option', array());
+
+	if ( ! $forms ) {// initialize the option and pupulate it with all forms using this feature
+		global $wpdb;
+		$results = $wpdb->get_col("SELECT DISTINCT menu_order FROM {$wpdb->prefix}posts WHERE post_type = 'frm_form_actions' AND post_status = 'publish'
+		 AND post_content LIKE '%just_changed_fields%' AND post_content NOT LIKE '%\"just_changed_fields\":\"\"%'");
+		foreach ( $results as $f ) { $forms[$f] = 1; }
+	}
+
+	// get actions from the formidable cache as done in FrmFormAction::get_action_for_form() see https://github.com/Strategy11/formidable-forms/blob/37326483db3b83148e4836e33803f2bb6b04c174/classes/models/FrmFormAction.php#L456
+	$args = \FrmFormAction::action_args( $form_id );// 2nd arg is limit
+	$actions = \FrmDb::check_cache( json_encode( $args ), 'frm_actions', $args, 'get_posts' );
+	$in_use = false;
+	foreach( $actions as $a ) {
+		$content = json_decode($a->post_content);
+		if ( !empty( $content->just_changed_fields ) ) {
+			$in_use = true;
+			break;
+		}
+	}
+
+	if ( $in_use ) {
+		$forms[ $form_id ] = 1;
+	} else {
+		unset( $forms[ $form_id ] );
+	}
+
+	update_option( 'frm_forms_using_just_updated_option', $forms );
+
+	return $options;
+}
+
 
 // add field to the form action settings
 function add_settings( $form_action, $atts = array() ) {	
