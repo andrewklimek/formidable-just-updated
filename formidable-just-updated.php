@@ -3,7 +3,7 @@ namespace ajk_frm_just_updated;
 /*
 Plugin Name: Formidable “Just Updated” Trigger
 Description: Trigger an action only when specified fields were JUST updated
-Version:     1.2
+Version:     1.2.1
 Author:      Andrew J Klimek
 Author URI:  https://github.com/andrewklimek
 Plugin URI:  https://github.com/andrewklimek/formidable-just-updated
@@ -25,7 +25,7 @@ add_filter('frm_form_options_before_update', __NAMESPACE__ .'\options_update', 2
 
 function skip( $message, $atts ) {
 	
-	// If used with formidable’s autoresponder,
+	// If used with formidables autoresponder,
 	// prevent 'check_update_actions' from triggering this action later on during 'frm_after_update_entry'
 	global $frm_vars;
 	if ( isset( $frm_vars['action_check'] ) ) {
@@ -57,9 +57,9 @@ function intercept( $skip, $atts ) {
 
 	// error_log( "Processing: {$atts['action']->post_name}"  );// for debugging
 
-	if ( $event !== 'update' ) {// does formidable's autoresponder ignore this?
-		// error_log("skip because this wasn’t an update.");
-		return "skip because this wasn’t an update.";
+	if ( $event !== 'update' ) {
+		error_log("skip because this wasnt an update... probably shouldnt happen!!");
+		return "skip because this wasnt an update.";
 	}
 
 	if ( ! is_object( $entry ) ) {// apparently $entry can be integer or object!
@@ -111,26 +111,25 @@ function intercept( $skip, $atts ) {
 		// changed field setting needs to only have one field and match the field in the shortcode
 		if ( count( $changed_setting ) !== 1 || $changed_setting[0] !== $_POST['field_id'] ) {
 			
-			return skip( "this was an single-field AJAX update, and it wasn’t the right field or all the fields required.", $atts );
+			return skip( "this was an single-field AJAX update, and it wasnt the right field or all the fields required.", $atts );
 		
 		} elseif ( $prev_value_cond && !empty( $prev_value_cond[ $changed_setting[0] ] ) ) {// OK, the correct field was changed, is there a conditional?
 			
-			if ( $previous_values = wp_cache_get( 'frm_changed_fields' ) ) {
+			if ( $previous_values = $GLOBALS['ajk_frm_just_updated'] ) {
 				
 				if ( $cond_result = check_conditionals( $prev_value_cond, $previous_values ) ) {
 					return skip( $cond_result, $atts );// failed a conditional
 				}
 				
 			} else {
-				return skip( "the cache returned nothing so we don’t know!", $atts );
+				return skip( "the cache returned nothing so we dont know!", $atts );
 			}
 		}
 		
-	} elseif ( $previous_values = wp_cache_get( 'frm_changed_fields' ) ) {// normal, full, non-AJAX entry update
+	} elseif ( $previous_values = $GLOBALS['ajk_frm_just_updated'] ) {// normal, full, non-AJAX entry update
 		
-		// error_log( 'didn’t pass as an ajax request... $_POST:  ' . print_r( $_POST, true ) );
+		// error_log( 'didnt pass as an ajax request... $_POST:  ' . print_r( $_POST, true ) );
 		
-
 		// get ID => value array of new values
 		global $wpdb;
 		$field_ids = $wpdb->get_col( "SELECT field_id, meta_value FROM {$wpdb->prefix}frm_item_metas WHERE item_id={$entry->id}" );
@@ -152,12 +151,11 @@ function intercept( $skip, $atts ) {
 			if ( $cond_result = check_conditionals( $prev_value_cond, $previous_values ) ) {
 				return skip( $cond_result, $atts );// failed a conditional
 			}
-			// apparently this action is OK to proceed wiht the original $skip value			
+			// apparently this action is OK to proceed wiht the original $skip value
 		}
 		
-		
 	} else {
-		return skip( "either there were no changes or the cache returned nothing so we don’t know!", $atts );
+		return skip( "cache returned nothing so we dont know!", $atts );
 	}
 	// error_log("not skipped");
 	return $skip;
@@ -178,7 +176,7 @@ function check_conditionals( $prev_value_cond, $previous_values ) {
 				return "conditional was not met, i.e. {$previous_values[ $field_id ]} is not '{$cond}' {$val}";
 		}
 	}
-	return false;// conditions passed, don’t skip
+	return false;// conditions passed, dont skip
 }
 
 // cache old values before update
@@ -188,7 +186,7 @@ function cache_old_values($values, $id) {
 	$forms = get_option('frm_forms_using_just_updated_option', array());
 	if ( empty( $forms[ (int) $values['form_id'] ] ) ) return $values;
 
-	if ( wp_cache_get( 'frm_changed_fields' ) ) error_log("already had frm_changed_fields cache ??");
+	// if ( wp_cache_get( 'frm_changed_fields' ) ) error_log("already had frm_changed_fields cache ??");
 
 	// get ID => value array of old values
 	global $wpdb;
@@ -196,15 +194,17 @@ function cache_old_values($values, $id) {
 	$meta_values = $wpdb->get_col( null , 1 );
 	$meta = array_combine( $field_ids, $meta_values );
 
-	wp_cache_set( 'frm_changed_fields', $meta );
+	// wp_cache_set( 'frm_changed_fields', $meta );
+
+	$GLOBALS['ajk_frm_just_updated'] = $meta;
 
 	return $values;
 }
-// different caching function for the AJAX, single-field, 1-click update buttons, since the other hook isn’t fired
+// different caching function for the AJAX, single-field, 1-click update buttons, since the other hook isnt fired
 function cache_old_value_ajax() {
 
 	if ( empty( $_POST['entry_id'] ) || empty( $_POST['field_id'] ) ) {
-		error_log('couldn’t get $_POST[\'entry_id\'] or $_POST[\'entry_id\'] during cache_old_value_ajax in formidable-just-updated.php');
+		error_log('couldnt get $_POST[\'entry_id\'] or $_POST[\'entry_id\'] during cache_old_value_ajax in formidable-just-updated.php');
 		return;
 	}
 
@@ -220,9 +220,12 @@ function cache_old_value_ajax() {
 	
 	$old_value = \FrmEntryMeta::get_entry_meta_by_field( (int) $_POST['entry_id'], (int) $_POST['field_id'] );
 	
-	wp_cache_set( 'frm_changed_fields', array( $_POST['field_id'] => $old_value ) );
+	// wp_cache_set( 'frm_changed_fields', array( $_POST['field_id'] => $old_value ) );
+
+	$GLOBALS['ajk_frm_just_updated'] = [ $_POST['field_id'] => $old_value ];
 
 }
+
 
 /**
  * store an array of forms which actually use an action with the "just updated" functionality
