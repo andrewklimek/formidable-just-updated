@@ -3,7 +3,7 @@ namespace ajk_frm_just_updated;
 /*
 Plugin Name: Formidable “Just Updated” Trigger
 Description: Trigger an action only when specified fields were JUST updated
-Version:     1.2.2
+Version:     1.2.3
 Author:      Andrew J Klimek
 Author URI:  https://github.com/andrewklimek
 Plugin URI:  https://github.com/andrewklimek/formidable-just-updated
@@ -45,9 +45,7 @@ function skip( $message, $atts ) {
  */ 
 function intercept( $skip, $atts ) {
 
-	if ( defined( 'WP_IMPORTING' ) && WP_IMPORTING ) {// is this needed?
-		return $skip;
-	}
+	if ( $skip ) return $skip;// was going to be skipped already because event type is wrong for this action, or is an import
 
 	extract( $atts );// $action (obj), $entry (int or obj), $form (obj), $event (str)
 
@@ -58,8 +56,8 @@ function intercept( $skip, $atts ) {
 	// error_log( "Processing: {$atts['action']->post_name}"  );// for debugging
 
 	if ( $event !== 'update' ) {
-		error_log("skip because this wasnt an update... probably shouldnt happen!!");
-		return "skip because this wasnt an update.";
+		// I think imports are still event==update but they would have passed a true value to $skip in the first place if action wasn't set to trigger on import
+		return "skip because this wasnt an update. (but it has a just changed setting... so we need a change)";
 	}
 
 	if ( ! is_object( $entry ) ) {// apparently $entry can be integer or object!
