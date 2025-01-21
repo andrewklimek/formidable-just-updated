@@ -3,7 +3,7 @@ namespace ajk_frm_just_updated;
 /*
 Plugin Name: Formidable “Just Updated” Trigger
 Description: Trigger an action only when specified fields were JUST updated
-Version:     1.2.1
+Version:     1.2.2
 Author:      Andrew J Klimek
 Author URI:  https://github.com/andrewklimek
 Plugin URI:  https://github.com/andrewklimek/formidable-just-updated
@@ -115,7 +115,7 @@ function intercept( $skip, $atts ) {
 		
 		} elseif ( $prev_value_cond && !empty( $prev_value_cond[ $changed_setting[0] ] ) ) {// OK, the correct field was changed, is there a conditional?
 			
-			if ( $previous_values = $GLOBALS['ajk_frm_just_updated'] ) {
+			if ( $previous_values = $GLOBALS['ajk_frm_just_updated_' . $entry->id ] ) {
 				
 				if ( $cond_result = check_conditionals( $prev_value_cond, $previous_values ) ) {
 					return skip( $cond_result, $atts );// failed a conditional
@@ -126,7 +126,7 @@ function intercept( $skip, $atts ) {
 			}
 		}
 		
-	} elseif ( $previous_values = $GLOBALS['ajk_frm_just_updated'] ) {// normal, full, non-AJAX entry update
+	} elseif ( $previous_values = $GLOBALS['ajk_frm_just_updated_' . $entry->id ] ) {// normal, full, non-AJAX entry update
 		
 		// error_log( 'didnt pass as an ajax request... $_POST:  ' . print_r( $_POST, true ) );
 		
@@ -196,7 +196,7 @@ function cache_old_values($values, $id) {
 
 	// wp_cache_set( 'frm_changed_fields', $meta );
 
-	$GLOBALS['ajk_frm_just_updated'] = $meta;
+	$GLOBALS['ajk_frm_just_updated_' . $id ] = $meta;
 
 	return $values;
 }
@@ -222,7 +222,7 @@ function cache_old_value_ajax() {
 	
 	// wp_cache_set( 'frm_changed_fields', array( $_POST['field_id'] => $old_value ) );
 
-	$GLOBALS['ajk_frm_just_updated'] = [ $_POST['field_id'] => $old_value ];
+	$GLOBALS['ajk_frm_just_updated_' . $_POST['entry_id'] ] = [ $_POST['field_id'] => $old_value ];
 
 }
 
